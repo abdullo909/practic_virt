@@ -1,1 +1,1 @@
-worker: python abdullo.py
+worker: python fuck.py
