@@ -4,8 +4,8 @@ from flask import Flask, request
 
 # ============ НАСТРОЙКИ ============
 BOT_TOKEN = "8567077313:AAFquTN6WU9GqXrgA38oOzULJfB5d4hAecM"
-CHANNEL_USERNAME = "myfilmzonehub"      # без @
-ADMIN_ID = 123456789                    # твой Telegram ID (замени!)
+CHANNEL_USERNAME = "@myfilmzonehub"
+ADMIN_ID = 6408109992
 
 WEBHOOK_HOST = "https://practic-virt-1.onrender.com"
 WEBHOOK_URL = f"{WEBHOOK_HOST}/{BOT_TOKEN}"
@@ -27,15 +27,13 @@ def admin_menu():
     kb.add("🔙 В меню")
     return kb
 
-
 # ============ ПРОВЕРКА ПОДПИСКИ ============
 def check_subscription(user_id):
     try:
-        member = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
+        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
         return member.status in ["member", "creator", "administrator"]
     except:
         return False
-
 
 # ============ КОМАНДА /start ============
 @bot.message_handler(commands=['start'])
@@ -50,15 +48,12 @@ def start(msg):
         "Готов открыть для себя новое кино? 🎥✨"
     )
 
-    # Если админ
     if user.id == ADMIN_ID:
         bot.send_message(msg.chat.id, "👑 *Админ-панель активирована*", parse_mode="Markdown",
                         reply_markup=admin_menu())
         return
 
-    # Если обычный юзер
     bot.send_message(msg.chat.id, greeting_text, parse_mode="Markdown", reply_markup=user_menu())
-
 
 # ============ ОБРАБОТКА ЛЮБОЙ КНОПКИ ============
 @bot.message_handler(func=lambda m: True)
@@ -68,7 +63,12 @@ def handle_all(msg):
     # Проверяем подписку
     if not check_subscription(user_id):
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("📢 Подписаться", url=f"https://t.me/{CHANNEL_USERNAME}"))
+        kb.add(
+            types.InlineKeyboardButton(
+                "📢 Подписаться",
+                url=f"https://t.me/{CHANNEL_USERNAME.replace('@','')}"
+            )
+        )
         kb.add(types.InlineKeyboardButton("✔ Проверить", callback_data="check_sub"))
 
         bot.send_message(msg.chat.id,
@@ -76,7 +76,7 @@ def handle_all(msg):
                         reply_markup=kb)
         return
 
-    # --- если подписан, ответы ---
+    # Если подписан
     if msg.text == "🔍 Поиск":
         bot.send_message(msg.chat.id, "🔎 Напиши название фильма…")
     elif msg.text == "🔥 Популярное":
@@ -85,7 +85,6 @@ def handle_all(msg):
         bot.send_message(msg.chat.id, "⭐ Избранное пока пусто…")
     else:
         bot.send_message(msg.chat.id, "🤖 Я пока не знаю такой команды.")
-
 
 # ============ КНОПКА "ПРОВЕРИТЬ" ============
 @bot.callback_query_handler(func=lambda c: c.data == "check_sub")
@@ -96,7 +95,6 @@ def check_sub(call):
     else:
         bot.answer_callback_query(call.id, "❗ Подпишись на канал!", show_alert=True)
 
-
 # ============ FLASK WEBHOOK ============
 
 @app.route(f"/{BOT_TOKEN}", methods=['POST'])
@@ -106,11 +104,9 @@ def webhook():
     bot.process_new_updates([update])
     return "ok", 200
 
-
 @app.route('/', methods=['GET'])
 def index():
     return "Bot is running!", 200
-
 
 # ============ ЗАПУСК ============
 if __name__ == '__main__':
