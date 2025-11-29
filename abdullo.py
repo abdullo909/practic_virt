@@ -1,169 +1,155 @@
 import telebot
 from telebot import types
-import sqlite3
-from datetime import datetime
+import requests
+from flask import Flask, request
 
-# =======================
-#   НАСТРОЙКИ
-# =======================
-BOT_TOKEN = "8567077313:AAFquTN6WU9GqXrgA38oOzULJfB5d4hAecM"
+# ==============================
+#    НАСТРОЙКИ БОТА
+# ==============================
+BOT_TOKEN = "ТВОЙ_TOKEN"
 CHANNEL_USERNAME = "@myfilmzonehub"
-ADMIN_ID = 695839201   # <-- твой админ айди
+ADMIN_ID = 695839201
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# ==============================
+#  ПРОВЕРКА ПОДПИСКИ
+# ==============================
 
-# =======================
-#   БАЗА ДАННЫХ
-# =======================
-conn = sqlite3.connect('users.db', check_same_thread=False)
-cursor = conn.cursor()
+def check_subscription(user_id):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
+    params = {"chat_id": CHANNEL_USERNAME, "user_id": user_id}
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users(
-    user_id INTEGER PRIMARY KEY,
-    username TEXT,
-    first_name TEXT,
-    reg_date TEXT
-)
-""")
-conn.commit()
-
-
-def add_user(user):
-    cursor.execute("SELECT user_id FROM users WHERE user_id=?", (user.id,))
-    if cursor.fetchone() is None:
-        cursor.execute(
-            "INSERT INTO users VALUES (?, ?, ?, ?)",
-            (user.id, user.username, user.first_name, datetime.now().strftime("%Y-%m-%d %H:%M"))
-        )
-        conn.commit()
-
-
-# =======================
-#   ПРОВЕРКА ПОДПИСКИ
-# =======================
-def is_subscribed(user_id):
     try:
-        status = bot.get_chat_member(CHANNEL_USERNAME, user_id).status
-        return status in ["member", "creator", "administrator"]
+        r = requests.get(url, params=params).json()
+        status = r["result"]["status"]
+
+        return status in ["member", "administrator", "creator"]
+
     except:
         return False
 
 
-# =======================
-#   ГЛАВНОЕ МЕНЮ ЮЗЕРА
-# =======================
+# ==============================
+#  КНОПКА "ПОДПИСАТЬСЯ"
+# ==============================
+
+def subscribe_keyboard():
+    kb = types.InlineKeyboardMarkup()
+    kb.add(types.InlineKeyboardButton("🔔 Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}"))
+    kb.add(types.InlineKeyboardButton("♻ Проверить подписку", callback_data="check"))
+    return kb
+
+
+# ==============================
+# МЕНЮ ЮЗЕРА
+# ==============================
+
 def user_menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("🔥 Найти фильм", "🎬 Новинки")
-    kb.add("❤️ Рекомендации", "📤 Поделиться ботом")
+    kb.add("🎬 Поиск фильма", "🔥 Популярное")
+    kb.add("⭐ Избранное")
     return kb
 
 
-# =======================
-#   МЕНЮ АДМИНА
-# =======================
+# ==============================
+# МЕНЮ АДМИНА
+# ==============================
+
 def admin_menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("📝 Создать пост", "🖼 Загрузить фото")
-    kb.add("📊 Статистика", "👥 Пользователи")
-    kb.add("⬅️ В обычный режим")
+    kb.add("📢 Сделать рассылку", "📊 Статистика")
+    kb.add("🎬 Поиск фильма", "🔥 Популярное")
     return kb
 
 
-# =======================
-#   КОМАНДА /START
-# =======================
-@bot.message_handler(commands=['start'])
-def start(msg):
-    user = msg.from_user
-    add_user(user)
+# ==============================
+# КОМАНДА /start
+# ==============================
 
-    # Проверка подписки
-    if not is_subscribed(user.id):
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("🔗 Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}"))
-        kb.add(types.InlineKeyboardButton("✔️ Проверить", callback_data="check_sub"))
+@bot.message_handler(commands=["start"])
+def welcome(msg):
 
+    # --- проверка подписки ---
+    if not check_subscription(msg.from_user.id):
         bot.send_message(
             msg.chat.id,
-            "⚠️ Чтобы пользоваться ботом — подпишись на канал!",
-            reply_markup=kb
+            "❗ *Чтобы пользоваться ботом — подпишись на наш кино-канал!*",
+            parse_mode="Markdown",
+            reply_markup=subscribe_keyboard()
         )
         return
 
-    # обычный юзер?
-    if user.id == ADMIN_ID:
-        bot.send_message(
-            msg.chat.id,
-            "👑 *Админ-панель активирована*",
-            parse_mode="Markdown",
-            reply_markup=admin_menu()
-        )
+    # --- если подписан ---
+    welcome_text = (
+        "🎬 *Добро пожаловать в PopKorn!* 🍿\n\n"
+        "🔥 Здесь тебя ждёт огромный каталог фильмов и сериалов.\n"
+        "🔍 Ищи по названию, жанрам и популярности.\n"
+        "⭐ Добавляй в избранное, находи новые релизы.\n\n"
+        "Готов открыть для себя новое кино? 🎥✨"
+    )
+
+    if msg.from_user.id == ADMIN_ID:
+        bot.send_message(msg.chat.id, "👑 Админ режим активирован", reply_markup=admin_menu())
     else:
+        bot.send_message(msg.chat.id, welcome_text, parse_mode="Markdown", reply_markup=user_menu())
+
+
+# ==============================
+# INLINE КНОПКИ
+# ==============================
+
+@bot.callback_query_handler(func=lambda call: call.data == "check")
+def recheck(call):
+    if check_subscription(call.from_user.id):
+        bot.answer_callback_query(call.id, "✔ Подписка подтверждена!")
+        bot.send_message(call.message.chat.id, "Теперь ты можешь пользоваться ботом 🎉", reply_markup=user_menu())
+    else:
+        bot.answer_callback_query(call.id, "❌ Ты ещё не подписался!")
+        bot.send_message(call.message.chat.id, "Подпишись на канал:", reply_markup=subscribe_keyboard())
+
+
+# ==============================
+# ОБЩИЕ СООБЩЕНИЯ (ПОСЛЕ ПОДПИСКИ)
+# ==============================
+
+@bot.message_handler(func=lambda message: True)
+def all_messages(msg):
+
+    # сначала проверяем подписку
+    if not check_subscription(msg.from_user.id):
         bot.send_message(
             msg.chat.id,
-            "🎬 *Добро пожаловать в PopKorn!* 🍿\n\n"
-            "🔥 Здесь тебя ждёт огромный каталог фильмов и сериалов.\n"
-            "🔍 Ищи по названию, жанрам и популярности.\n"
-            "⭐ Добавляй в избранное, находи новые релизы.\n\n"
-            "Готов открыть для себя новое кино? 🎥✨",
-            parse_mode="Markdown",
-            reply_markup=user_menu()
+            "❗ Чтобы пользоваться ботом — обязательно подпишись!",
+            reply_markup=subscribe_keyboard()
         )
-
-
-# =======================
-#   INLINE CALLBACK
-# =======================
-@bot.callback_query_handler(func=lambda c: True)
-def callback(c):
-    if c.data == "check_sub":
-        if is_subscribed(c.from_user.id):
-            bot.delete_message(c.message.chat.id, c.message.message_id)
-            start(c.message)
-        else:
-            bot.answer_callback_query(c.id, "❌ Вы не подписаны!")
-
-
-# =======================
-#   АДМИН КОМАНДЫ
-# =======================
-@bot.message_handler(func=lambda m: m.text == "👥 Пользователи")
-def admin_users(msg):
-    if msg.from_user.id != ADMIN_ID:
         return
 
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total = cursor.fetchone()[0]
-
-    bot.send_message(msg.chat.id, f"👥 Всего пользователей: *{total}*", parse_mode="Markdown")
+    # дальше логика бота
+    bot.send_message(msg.chat.id, "🔍 Напиши название фильма:", reply_markup=user_menu())
 
 
-@bot.message_handler(func=lambda m: m.text == "📊 Статистика")
-def stats(msg):
-    if msg.from_user.id != ADMIN_ID:
-        return
+# ==============================
+#   WEBHOOK ДЛЯ RENDER
+# ==============================
 
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total = cursor.fetchone()[0]
+WEBHOOK_HOST = "https://ТВОЙ-RENDER-URL.onrender.com"
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = WEBHOOK_HOST + WEBHOOK_PATH
 
-    bot.send_message(msg.chat.id,
-                    f"📊 *Статистика бота*\n\n"
-                    f"👥 Пользователей: {total}\n"
-                    f"📅 Запущено: {datetime.now().strftime('%Y-%m-%d')}",
-                    parse_mode="Markdown")
+app = Flask(__name__)
 
 
-@bot.message_handler(func=lambda m: m.text == "📝 Создать пост")
-def post(msg):
-    if msg.from_user.id != ADMIN_ID:
-        return
-    bot.send_message(msg.chat.id, "✏️ Напиши текст поста:")
+@app.route(WEBHOOK_PATH, methods=['POST'])
+def webhook():
+    json_str = request.stream.read().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "OK", 200
 
 
-# =======================
-#   СТАРТ БОТА
-# =======================
-bot.infinity_polling()
+# Запуск Flask
+if __name__ == "__main__":
+    bot.remove_webhook()
+    bot.set_webhook(url=WEBHOOK_URL)
+    app.run(host="0.0.0.0", port=10000)
