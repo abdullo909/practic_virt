@@ -3,7 +3,7 @@ from telebot import types
 from flask import Flask, request
 
 # ============ НАСТРОЙКИ ============
-BOT_TOKEN = "ТВОЙ_ТОКЕН"
+BOT_TOKEN = "8567077313:AAFquTN6WU9GqXrgA38oOzULJfB5d4hAecM"
 CHANNEL_USERNAME = "myfilmzonehub"      # без @
 ADMIN_ID = 123456789                    # твой Telegram ID (замени!)
 
