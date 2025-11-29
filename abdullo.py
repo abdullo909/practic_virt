@@ -6,7 +6,7 @@ from flask import Flask, request
 # ==============================
 #    НАСТРОЙКИ БОТА
 # ==============================
-BOT_TOKEN = "ТВОЙ_TOKEN"
+BOT_TOKEN = "8567077313:AAFquTN6WU9GqXrgA38oOzULJfB5d4hAecM"
 CHANNEL_USERNAME = "@myfilmzonehub"
 ADMIN_ID = 695839201
 
