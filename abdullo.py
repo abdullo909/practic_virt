@@ -7,7 +7,7 @@ BOT_TOKEN = "8567077313:AAFquTN6WU9GqXrgA38oOzULJfB5d4hAecM"
 CHANNEL_USERNAME = "myfilmzonehub"      # без @
 ADMIN_ID = 123456789                    # твой Telegram ID (замени!)
 
-WEBHOOK_HOST = "https://ИМЯ_СЕРВИСА.onrender.com"
+WEBHOOK_HOST = "https://practic-virt-1.onrender.com"
 WEBHOOK_URL = f"{WEBHOOK_HOST}/{BOT_TOKEN}"
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
